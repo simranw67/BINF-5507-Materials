@@ -1,4 +1,4 @@
-# import all necessary libraries here
+# import all the necessary libraries 
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
@@ -14,8 +14,43 @@ def impute_missing_values(data, strategy='mean'):
     :param strategy: str, imputation method ('mean', 'median', 'mode')
     :return: pandas DataFrame
     """
-    # TODO: Fill missing values based on the specified strategy
-    pass
+    # Copy the data to avoid modifying original
+    imputed_data = data.copy()
+
+    # Check which strategy has been called, and its validity 
+    if strategy in ['mean', 'median', 'mode']:
+        # First do imputation for numeric columns
+        num_cols = imputed_data.select_dtypes(include=[np.number]).columns
+        for col in num_cols:
+            try:
+                if strategy == 'mean':
+                    imputed_data[col] = imputed_data[col].fillna(imputed_data[col].mean()) #removed inplace=True, causing error
+                elif strategy == 'median':
+                    imputed_data[col] = imputed_data[col].fillna(imputed_data[col].median())
+                elif strategy == 'mode':
+                    mode_val = imputed_data[col].mode()
+                    if not mode_val.empty:
+                        imputed_data[col] = imputed_data[col].fillna(mode_val.iloc[0]) #use the first mode value; if there are more than 1
+            except Exception as e:
+                # Fallback to mode if any error occurs
+                mode_val = imputed_data[col].mode()
+                if not mode_val.empty:
+                    imputed_data[col] = imputed_data[col].fillna(mode_val.iloc[0])
+
+        # Use mode for categorical columns (only if strategy is mode then will impute categorical)
+        if strategy == 'mode':
+            cat_cols = imputed_data.select_dtypes(include=['object', 'category']).columns
+            for col in cat_cols:
+                if imputed_data[col].isnull().any():
+                    mode_val = imputed_data[col].mode()
+                    if not mode_val.empty:
+                        imputed_data[col] = imputed_data[col].fillna(mode_val.iloc[0])
+    else:
+        raise ValueError("Invalid strategy. Please choose 'mean', 'median', or 'mode'.") #Error if any other strategy is entered
+
+    # return the dataframe (pandas dataframe) with imputed values
+    return imputed_data
+    
 
 # 2. Remove Duplicates
 def remove_duplicates(data):
@@ -24,8 +59,9 @@ def remove_duplicates(data):
     :param data: pandas DataFrame
     :return: pandas DataFrame
     """
-    # TODO: Remove duplicate rows
-    pass
+    noduplicates_data = data.copy() 
+    noduplicates_data = noduplicates_data.drop_duplicates() #Removes duplicate rows from the dataset
+    return noduplicates_data #Save dataframe without duplicates
 
 # 3. Normalize Numerical Data
 def normalize_data(data,method='minmax'):
@@ -33,8 +69,22 @@ def normalize_data(data,method='minmax'):
     :param data: pandas DataFrame
     :param method: str, normalization method ('minmax' (default) or 'standard')
     """
-    # TODO: Normalize numerical data using Min-Max or Standard scaling
-    pass
+    normalized_data = data.copy()
+    
+    #Select only numeric columns 
+    numeric_cols = normalized_data.select_dtypes(include=[np.number]).columns
+    
+    # Normalization based on the specified method
+    if method == 'minmax':
+        scaler = MinMaxScaler()
+    elif method == 'standard':
+        scaler = StandardScaler()
+    else: 
+        raise ValueError("Not a valid normalization method. Choose either 'minmax' or 'standard'.")
+    
+    #Transform data based on the scalar, for only the numeric columns (numeric_cols) that were defined before
+    normalized_data[numeric_cols]= scaler.fit_transform(normalized_data[numeric_cols])
+    return normalized_data #Save normalized data as dataframe
 
 # 4. Remove Redundant Features   
 def remove_redundant_features(data, threshold=0.9):
@@ -43,8 +93,19 @@ def remove_redundant_features(data, threshold=0.9):
     :param threshold: float, correlation threshold
     :return: pandas DataFrame
     """
-    # TODO: Remove redundant features based on the correlation threshold (HINT: you can use the corr() method)
-    pass
+    noredundantfeatures_data = data.copy()
+    
+    # Calculates the correlation matrix using corr(); only for numerical data
+    corr_matrix = noredundantfeatures_data.select_dtypes(include=[np.number]).corr().abs()
+    
+    # Hide the lower triangle (below threshold line) to only evaluate the upper triangle in the corr_matrix -> boolean
+    upper_triangle = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+    
+    # Now look for columns where correlation is more than the threshold (default 0.9 -> can modify)
+    to_drop = [column for column in upper_triangle.columns if any(upper_triangle[column] > threshold)]
+    
+    noredundantfeatures_data.drop(columns=to_drop, inplace=True) #Drops the columns that are redundant
+    return noredundantfeatures_data # Save dataframe without redundant features
 
 # ---------------------------------------------------
 
